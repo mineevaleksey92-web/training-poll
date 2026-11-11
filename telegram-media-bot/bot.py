@@ -41,6 +41,9 @@ except ImportError:
 
 logging.basicConfig(format="%(asctime)s %(levelname)s %(name)s: %(message)s", level=logging.INFO)
 log = logging.getLogger("media-bot")
+# httpx пишет в лог каждый URL Bot API, а в нём токен бота — глушим.
+for _noisy in ("httpx", "httpx2"):
+    logging.getLogger(_noisy).setLevel(logging.WARNING)
 
 TELEGRAM_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 ALLOWED_USERS = {int(x) for x in os.environ.get("ALLOWED_USER_IDS", "").split(",") if x.strip()}
