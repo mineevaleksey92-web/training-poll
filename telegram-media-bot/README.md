@@ -102,6 +102,22 @@ python bot.py
 Шрифт для подписей на видео бот найдёт сам (DejaVu на Linux, Arial на Windows/Mac).
 Если нужен другой — укажите путь к .ttf в `FONT_FILE` в `.env`.
 
+### Голосовые сообщения (необязательно)
+
+Голосовое боту = текстовая команда: бот распознаёт речь прямо на вашем компьютере
+(бесплатно, через faster-whisper), показывает распознанный текст и выполняет его.
+
+```
+pip install ctranslate2 huggingface-hub tokenizers av tqdm
+pip install --no-deps faster-whisper
+```
+
+`--no-deps` нужен потому, что faster-whisper тянет `onnxruntime`, которого пока нет
+для новых версий Python на Windows; боту он не нужен.
+При первом голосовом скачается модель (`small` — около 500 МБ), дальше работает офлайн.
+Настройки в `.env`: `WHISPER_MODEL` (`tiny`/`base`/`small`/`medium` — чем больше, тем
+точнее и медленнее), `WHISPER_LANGUAGE` (по умолчанию `ru`; пусто — автоопределение).
+
 ### Обязательно ограничьте доступ
 
 Запросы к Claude оплачиваете вы, поэтому впишите свой Telegram id в `ALLOWED_USER_IDS`.

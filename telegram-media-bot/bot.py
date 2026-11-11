@@ -52,6 +52,8 @@ EFFORT = os.environ.get("CLAUDE_EFFORT", "medium")
 DATA_DIR = Path(os.environ.get("DATA_DIR", "./data")).resolve()
 MAX_TOOL_ROUNDS = 40
 MAX_HISTORY_MESSAGES = 60
+WHISPER_MODEL = os.environ.get("WHISPER_MODEL", "small")
+WHISPER_LANGUAGE = os.environ.get("WHISPER_LANGUAGE", "ru") or None
 
 SYSTEM_PROMPT = """Ты — видеомонтажёр и фоторедактор внутри Telegram-бота.
 Пользователь присылает фото и видео и пишет, что с ними сделать.
@@ -184,9 +186,8 @@ async def on_media(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         tg_file, ext = msg.animation, ".mp4"
     elif msg.video_note:
         tg_file, ext = msg.video_note, ".mp4"
-    elif msg.audio or msg.voice:
-        a = msg.audio or msg.voice
-        tg_file, ext = a, Path(getattr(a, "file_name", None) or "a.ogg").suffix or ".ogg"
+    elif msg.audio:
+        tg_file, ext = msg.audio, Path(msg.audio.file_name or "a.mp3").suffix or ".mp3"
     elif msg.document:
         tg_file, ext = msg.document, Path(msg.document.file_name or "file").suffix.lower()
     else:
@@ -233,6 +234,67 @@ async def _run_album(update: Update, context: ContextTypes.DEFAULT_TYPE,
             update.effective_chat.id,
             f"Получил файлы: {', '.join(s.pending_files)}. Напиши, что с ними сделать.",
         )
+
+
+_whisper_model = None
+_whisper_lock = asyncio.Lock()
+
+
+def _transcribe_sync(path: Path) -> str:
+    segments, _info = _whisper_model.transcribe(
+        str(path), language=WHISPER_LANGUAGE, beam_size=5,
+        vad_filter=False,  # VAD требует onnxruntime — без него тоже работает
+    )
+    return " ".join(seg.text.strip() for seg in segments).strip()
+
+
+async def transcribe(path: Path) -> str:
+    """Распознаёт речь локально через faster-whisper (модель качается один раз)."""
+    global _whisper_model
+    async with _whisper_lock:
+        if _whisper_model is None:
+            from faster_whisper import WhisperModel  # импорт здесь: пакет необязательный
+
+            log.info("Загружаю модель Whisper '%s' (первый раз — скачивание)…", WHISPER_MODEL)
+            _whisper_model = await asyncio.to_thread(
+                WhisperModel, WHISPER_MODEL, device="cpu", compute_type="int8"
+            )
+        return await asyncio.to_thread(_transcribe_sync, path)
+
+
+async def on_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Голосовое сообщение = текстовая команда: распознаём и выполняем."""
+    if not allowed(update):
+        return
+    msg = update.message
+    voice_dir = DATA_DIR / "_voice"
+    voice_dir.mkdir(parents=True, exist_ok=True)
+    path = voice_dir / f"{msg.chat_id}_{msg.message_id}.ogg"
+    await context.bot.send_chat_action(msg.chat_id, ChatAction.TYPING)
+    try:
+        f = await msg.voice.get_file()
+        await f.download_to_drive(path)
+        text = await transcribe(path)
+    except ImportError:
+        await msg.reply_text(
+            "Распознавание голоса не установлено. На компьютере с ботом выполните:\n"
+            "pip install ctranslate2 huggingface-hub tokenizers av tqdm\n"
+            "pip install --no-deps faster-whisper\n"
+            "и перезапустите бота."
+        )
+        return
+    except Exception:
+        log.exception("voice transcription failed")
+        await msg.reply_text("Не получилось распознать голосовое. Попробуй ещё раз или напиши текстом.")
+        return
+    finally:
+        path.unlink(missing_ok=True)
+
+    if not text:
+        await msg.reply_text("Ничего не расслышал — попробуй ещё раз.")
+        return
+    await msg.reply_text(f"🎤 «{text}»")
+    await run_task(update, context, text)
 
 
 async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -377,7 +439,8 @@ def main() -> None:
     app.add_handler(CommandHandler("new", cmd_new))
     app.add_handler(CommandHandler("files", cmd_files))
     media = (filters.PHOTO | filters.VIDEO | filters.ANIMATION | filters.VIDEO_NOTE
-             | filters.AUDIO | filters.VOICE | filters.Document.ALL)
+             | filters.AUDIO | filters.Document.ALL)
+    app.add_handler(MessageHandler(filters.VOICE, on_voice))
     app.add_handler(MessageHandler(media, on_media))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
     log.info("Bot started, model=%s", MODEL)
