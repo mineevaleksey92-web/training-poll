@@ -108,12 +108,19 @@ python bot.py
 (бесплатно, через faster-whisper), показывает распознанный текст и выполняет его.
 
 ```
+$env:PYYAML_FORCE_LIBYAML="0"          # только Windows PowerShell, см. ниже
+pip install pyyaml
 pip install ctranslate2 huggingface-hub tokenizers av tqdm
 pip install --no-deps faster-whisper
 ```
 
-`--no-deps` нужен потому, что faster-whisper тянет `onnxruntime`, которого пока нет
-для новых версий Python на Windows; боту он не нужен.
+Зачем эти шаги на свежем Python (3.15) под Windows:
+- `PYYAML_FORCE_LIBYAML=0` — ставит pyyaml в варианте на чистом Python, без
+  компилятора Visual C++ (готовой сборки под 3.15 пока нет);
+- `--no-deps` — faster-whisper тянет `onnxruntime`, которого для 3.15 ещё нет;
+  боту он не нужен (фильтр тишины отключён).
+
+На Linux/macOS или Python 3.12–3.13 достаточно `pip install faster-whisper`.
 При первом голосовом скачается модель (`small` — около 500 МБ), дальше работает офлайн.
 Настройки в `.env`: `WHISPER_MODEL` (`tiny`/`base`/`small`/`medium` — чем больше, тем
 точнее и медленнее), `WHISPER_LANGUAGE` (по умолчанию `ru`; пусто — автоопределение).
