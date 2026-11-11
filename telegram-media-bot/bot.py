@@ -283,9 +283,12 @@ async def on_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             "и перезапустите бота."
         )
         return
-    except Exception:
+    except Exception as e:
         log.exception("voice transcription failed")
-        await msg.reply_text("Не получилось распознать голосовое. Попробуй ещё раз или напиши текстом.")
+        await msg.reply_text(
+            "Не получилось распознать голосовое. Попробуй ещё раз или напиши текстом.\n"
+            f"Причина: {type(e).__name__}: {str(e)[:300]}"
+        )
         return
     finally:
         path.unlink(missing_ok=True)
