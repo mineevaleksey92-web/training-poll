@@ -357,6 +357,13 @@ def split_message(text: str, limit: int = 4000) -> list[str]:
 
 
 def main() -> None:
+    missing = [tool for tool in ("ffmpeg", "ffprobe") if shutil.which(tool) is None]
+    if missing:
+        raise SystemExit(
+            f"Не найдено: {', '.join(missing)}. Установите ffmpeg "
+            "(Windows: winget install Gyan.FFmpeg, затем откройте НОВОЕ окно терминала; "
+            "macOS: brew install ffmpeg; Linux: apt install ffmpeg) и запустите бота снова."
+        )
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     app = (
         Application.builder()
