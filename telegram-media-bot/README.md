@@ -63,6 +63,45 @@ cp .env.example .env        # впишите токены
 python bot.py
 ```
 
+### Вариант 3: на своём компьютере Windows
+
+1. Откройте «Терминал» (или PowerShell) и установите Python и ffmpeg:
+   ```
+   winget install Python.Python.3.12
+   winget install Gyan.FFmpeg
+   ```
+   Закройте и снова откройте терминал, проверьте: `python --version` и `ffmpeg -version`.
+2. Скачайте код (Code → Download ZIP на GitHub), распакуйте, откройте папку
+   `telegram-media-bot`, в адресной строке проводника наберите `powershell` и нажмите Enter.
+3. В открывшемся окне:
+   ```
+   python -m venv .venv
+   .venv\Scripts\activate
+   pip install -r requirements.txt
+   copy .env.example .env
+   notepad .env
+   ```
+   Впишите токен, ключ Claude и свой id, сохраните.
+   (Если PowerShell ругается на `activate`, выполните
+   `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` и повторите.)
+4. Запуск: `python bot.py`. Пока окно открыто — бот работает. Остановить: Ctrl+C.
+   В следующий раз: открыть папку → `powershell` → `.venv\Scripts\activate` → `python bot.py`.
+
+### Вариант 4: на своём Mac
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"  # если нет Homebrew
+brew install python ffmpeg
+cd ~/Downloads/<распакованная папка>/telegram-media-bot
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env && open -e .env     # впишите токены и сохраните
+python bot.py
+```
+
+Шрифт для подписей на видео бот найдёт сам (DejaVu на Linux, Arial на Windows/Mac).
+Если нужен другой — укажите путь к .ttf в `FONT_FILE` в `.env`.
+
 ### Обязательно ограничьте доступ
 
 Запросы к Claude оплачиваете вы, поэтому впишите свой Telegram id в `ALLOWED_USER_IDS`.

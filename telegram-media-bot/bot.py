@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -68,8 +69,8 @@ SYSTEM_PROMPT = """Ты — видеомонтажёр и фоторедакто
    не перезаписывай исходники.
 6. Ответь пользователю коротко, по-русски: что сделано, и что можно поправить.
 Лимит Telegram на отправку — 50 МБ; если результат больше, пережми.
-Для текста с кириллицей в drawtext используй
-fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf (или DejaVuSans-Bold.ttf)."""
+Для текста (drawtext, в том числе кириллица) используй fontfile=font.ttf —
+этот шрифт лежит в рабочей папке; не удаляй его и не отправляй пользователю."""
 
 client = anthropic.AsyncAnthropic()
 
@@ -88,10 +89,35 @@ class ChatSession:
 SESSIONS: dict[int, ChatSession] = {}
 
 
+FONT_CANDIDATES = [
+    os.environ.get("FONT_FILE", ""),
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",   # Linux / Docker
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    r"C:\Windows\Fonts\arialbd.ttf",                          # Windows
+    r"C:\Windows\Fonts\arial.ttf",
+    "/System/Library/Fonts/Supplemental/Arial Bold.ttf",      # macOS
+    "/System/Library/Fonts/Supplemental/Arial.ttf",
+    "/Library/Fonts/Arial Unicode.ttf",
+]
+
+
+def install_font(workspace: Path) -> None:
+    """Кладёт шрифт с кириллицей в рабочую папку как font.ttf."""
+    target = workspace / "font.ttf"
+    if target.exists():
+        return
+    for cand in FONT_CANDIDATES:
+        if cand and Path(cand).is_file():
+            shutil.copyfile(cand, target)
+            return
+    log.warning("Не найден шрифт для подписей; задайте FONT_FILE в .env")
+
+
 def get_session(chat_id: int) -> ChatSession:
     if chat_id not in SESSIONS:
         ws = DATA_DIR / str(chat_id)
         ws.mkdir(parents=True, exist_ok=True)
+        install_font(ws)
         SESSIONS[chat_id] = ChatSession(workspace=ws)
     return SESSIONS[chat_id]
 
@@ -126,6 +152,7 @@ async def cmd_new(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     s = get_session(update.effective_chat.id)
     async with s.lock:
         reset_workspace(s.workspace)
+        install_font(s.workspace)
         s.messages.clear()
         s.pending_files.clear()
         s.counter = 0
