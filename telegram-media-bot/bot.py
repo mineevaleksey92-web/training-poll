@@ -240,9 +240,32 @@ _whisper_model = None
 _whisper_lock = asyncio.Lock()
 
 
+def _decode_audio_ffmpeg(path: Path):
+    """ogg/opus -> float32 mono 16 кГц через ffmpeg.
+
+    Свой декодер вместо встроенного в faster-whisper: тот вызывает PyAV с
+    параметром, которого нет в av>=15 (TypeError: metadata_errors).
+    """
+    import subprocess
+
+    import numpy as np
+
+    proc = subprocess.run(
+        ["ffmpeg", "-nostdin", "-v", "error", "-i", str(path),
+         "-f", "f32le", "-ac", "1", "-ar", "16000", "pipe:1"],
+        capture_output=True, timeout=120,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(f"ffmpeg: {proc.stderr.decode(errors='replace')[-300:]}")
+    return np.frombuffer(proc.stdout, dtype=np.float32)
+
+
 def _transcribe_sync(path: Path) -> str:
+    audio = _decode_audio_ffmpeg(path)
+    if audio.size == 0:
+        return ""
     segments, _info = _whisper_model.transcribe(
-        str(path), language=WHISPER_LANGUAGE, beam_size=5,
+        audio, language=WHISPER_LANGUAGE, beam_size=5,
         vad_filter=False,  # VAD требует onnxruntime — без него тоже работает
     )
     return " ".join(seg.text.strip() for seg in segments).strip()
